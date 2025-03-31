@@ -4,37 +4,34 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 
 const app = express();
-const server = http.createServer(app);
-
 app.use(cors());
 
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"],
-  },
+    origin: "http://localhost:5173", // Certifique-se de que esta é a URL correta do frontend
+    methods: ["GET", "POST"]
+  }
 });
 
-let users = {};
+const users = new Set();
 
 io.on("connection", (socket) => {
   console.log("Usuário conectado:", socket.id);
+  users.add(socket.id);
+  io.emit("update_users", Array.from(users));
 
-  socket.on("registerUser", (username) => {
-    users[socket.id] = { id: socket.id, name: username };
-    io.emit("updateUsers", Object.values(users));
-  });
-
-  socket.on("sendMessage", ({ message, to }) => {
-    if (users[to]) {
-      io.to(to).emit("receiveMessage", { message, from: users[socket.id].name });
-    }
+  socket.on("send_message", (data) => {
+    io.emit("receive_message", data);
   });
 
   socket.on("disconnect", () => {
-    delete users[socket.id];
-    io.emit("updateUsers", Object.values(users));
+    console.log("Usuário desconectado:", socket.id);
+    users.delete(socket.id);
+    io.emit("update_users", Array.from(users));
   });
 });
 
-server.listen(3001, () => console.log("Servidor rodando na porta 3001"));
+server.listen(3001, () => {
+  console.log("Servidor rodando na porta 3001");
+});

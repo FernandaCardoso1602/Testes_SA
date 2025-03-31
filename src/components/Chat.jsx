@@ -1,82 +1,68 @@
-import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import { useState, useEffect } from "react";
+import io from "socket.io-client";
 import "./Chat.css";
+import { FaPaperPlane } from "react-icons/fa";
 
 const socket = io("http://localhost:3001");
 
-function Chat({ username }) {
+const Chat = () => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-
+  
   useEffect(() => {
-    if (!username) return;
-
-    socket.emit("registerUser", username);
-
-    // Atualiza a lista de usuários quando receber a atualização do servidor
-    socket.on("updateUsers", (userList) => {
-      console.log("Usuários atualizados:", userList);
-      setUsers(userList.filter((user) => user.name !== username)); // Remove o próprio usuário da lista
+    socket.on("receive_message", (data) => {
+      setMessages((prev) => [...prev, data]);
     });
 
-    // Receber mensagens
-    socket.on("receiveMessage", (msg) => {
-      setMessages((prevMessages) => [...prevMessages, msg]);
+    socket.on("update_users", (data) => {
+      setUsers(data);
     });
 
     return () => {
-      socket.off("updateUsers");
-      socket.off("receiveMessage");
+      socket.off("receive_message");
+      socket.off("update_users");
     };
-  }, [username]);
+  }, []);
 
   const sendMessage = () => {
-    if (!message.trim() || !selectedUser) return;
-
-    const msgData = { message, to: selectedUser.id };
-    socket.emit("sendMessage", msgData);
-
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { from: "Você", message },
-    ]);
-
-    setMessage("");
+    if (message.trim()) {
+      socket.emit("send_message", { text: message, user: "Nanda" });
+      setMessage("");
+    }
   };
 
   return (
-    <div>
-      <h2>Bem-vindo(a), {username}</h2>
-      <h3>Usuários online:</h3>
-      <ul>
-        {users.map((user) => (
-          <li key={user.id} onClick={() => setSelectedUser(user)}>
-            {user.name} {selectedUser?.id === user.id && "(Selecionado)"}
-          </li>
-        ))}
-      </ul>
-
-      <h3>Chat</h3>
-      <ul>
+    <div className="chat-container">
+      <div className="chat-header">Chat</div>
+      <div className="chat-users">
+        <h3>Usuários Online</h3>
+        <ul>
+          {users.map((user, index) => (
+            <li key={index}>{user.name}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="chat-messages">
         {messages.map((msg, index) => (
-          <li key={index}>
-            <strong>{msg.from}:</strong> {msg.message}
-          </li>
+          <div key={index} className={`message ${msg.user === "Nanda" ? "user" : "other"}`}>
+            <strong>{msg.user}:</strong> {msg.text}
+          </div>
         ))}
-      </ul>
-
-      <input
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        placeholder="Digite sua mensagem"
-      />
-      <button disabled={!selectedUser} onClick={sendMessage}>
-        Enviar
-      </button>
+      </div>
+      <div className="chat-input">
+        <input
+          type="text"
+          placeholder="Digite sua mensagem..."
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+        />
+        <button onClick={sendMessage}>
+          <FaPaperPlane />
+        </button>
+      </div>
     </div>
   );
-}
+};
 
 export default Chat;
