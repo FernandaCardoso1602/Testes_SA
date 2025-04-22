@@ -1,68 +1,84 @@
-import { useState, useEffect } from "react";
-import io from "socket.io-client";
-import "./Chat.css";
-import { FaPaperPlane } from "react-icons/fa";
+import { useEffect, useState, useMemo } from "react";
+import { io } from "socket.io-client";
+import { auth, logout } from "../Firebase";
+import { useNavigate } from "react-router-dom";
 
-const socket = io("http://localhost:3001");
+const socket = useMemo(() => io("http://localhost:3001", { transports: ["websocket"] }), []);
 
-const Chat = () => {
+function Chat() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
-  
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
   useEffect(() => {
-    socket.on("receive_message", (data) => {
-      setMessages((prev) => [...prev, data]);
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      if (!currentUser) {
+        navigate("/");
+      } else {
+        setUser(currentUser);
+        socket.emit("registerUser", currentUser.displayName);
+      }
     });
 
-    socket.on("update_users", (data) => {
-      setUsers(data);
+    return () => unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    socket.on("updateUsers", (userList) => {
+      if (auth.currentUser) {
+        setUsers(userList.filter((u) => u.name !== auth.currentUser.displayName));
+      }
+    });
+
+    socket.on("receiveMessage", (msg) => {
+      setMessages((prev) => [...prev, msg]);
     });
 
     return () => {
-      socket.off("receive_message");
-      socket.off("update_users");
+      socket.off("updateUsers");
+      socket.off("receiveMessage");
     };
   }, []);
 
   const sendMessage = () => {
-    if (message.trim()) {
-      socket.emit("send_message", { text: message, user: "Nanda" });
-      setMessage("");
-    }
+    if (!message.trim() || !selectedUser) return;
+    socket.emit("sendMessage", { message, to: selectedUser.id });
+    setMessages((prev) => [...prev, { from: "Você", message }]);
+    setMessage("");
   };
 
   return (
-    <div className="chat-container">
-      <div className="chat-header">Chat</div>
-      <div className="chat-users">
-        <h3>Usuários Online</h3>
-        <ul>
-          {users.map((user, index) => (
-            <li key={index}>{user.name}</li>
-          ))}
-        </ul>
-      </div>
-      <div className="chat-messages">
-        {messages.map((msg, index) => (
-          <div key={index} className={`message ${msg.user === "Nanda" ? "user" : "other"}`}>
-            <strong>{msg.user}:</strong> {msg.text}
-          </div>
+    <div>
+      <h2>Bem-vindo(a), {user?.displayName}</h2>
+      <button onClick={logout}>Sair</button>
+
+      <h3>Usuários online:</h3>
+      <ul>
+        {users.map((u) => (
+          <li key={u.id} onClick={() => setSelectedUser(u)}>
+            {u.name} {selectedUser?.id === u.id && "(Selecionado)"}
+          </li>
         ))}
-      </div>
-      <div className="chat-input">
-        <input
-          type="text"
-          placeholder="Digite sua mensagem..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
-        <button onClick={sendMessage}>
-          <FaPaperPlane />
-        </button>
-      </div>
+      </ul>
+
+      <h3>Chat</h3>
+      <ul>
+        {messages.map((msg, index) => (
+          <li key={index}>
+            <strong>{msg.from}:</strong> {msg.message}
+          </li>
+        ))}
+      </ul>
+
+      <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Digite sua mensagem" />
+      <button disabled={!selectedUser} onClick={sendMessage}>
+        Enviar
+      </button>
     </div>
   );
-};
+}
 
 export default Chat;

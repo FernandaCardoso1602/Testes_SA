@@ -1,76 +1,33 @@
 import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
-import "./Chat.css";
+import { login } from "../Firebase";
+import "./Login.css";
 
-const socket = io("http://localhost:3001", {
-  transports: ["websocket"], // Garante que usa WebSockets
-  reconnectionAttempts: 5, // Tenta se reconectar
-  reconnectionDelay: 1000, // Tempo entre tentativas
-});
+function Login() {
+  const [user, setUser] = useState(null);
+  const [showPopup, setShowPopup] = useState(false);
 
-function Chat({ username }) {
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-
-  useEffect(() => {
-    if (!username) return;
-
-    socket.emit("registerUser", username);
-
-    socket.on("updateUsers", (userList) => {
-      console.log("Lista de usuários atualizada:", userList);
-      setUsers(userList.filter((user) => user.name !== username));
-    });
-
-    socket.on("receiveMessage", (msg) => {
-      setMessages((prevMessages) => [...prevMessages, msg]);
-    });
-
-    return () => {
-      socket.off("updateUsers");
-      socket.off("receiveMessage");
-    };
-  }, [username]);
-
-  const sendMessage = () => {
-    if (!message.trim() || !selectedUser) return;
-
-    const msgData = { message, to: selectedUser.id };
-    socket.emit("sendMessage", msgData);
-
-    setMessages((prevMessages) => [...prevMessages, { from: "Você", message }]);
-    setMessage("");
+  const handleLogin = async () => {
+    const loggedInUser = await login();
+    if (loggedInUser) {
+      setUser(loggedInUser);
+      setShowPopup(true);
+      setTimeout(() => {
+        window.location.href = "/"; // Redireciona ao site principal
+      }, 2000);
+    }
   };
 
   return (
-    <div>
-      <h2>Bem-vindo(a), {username}</h2>
-      <h3>Usuários online:</h3>
-      <ul>
-        {users.map((user) => (
-          <li key={user.id} onClick={() => setSelectedUser(user)}>
-            {user.name} {selectedUser?.id === user.id && "(Selecionado)"}
-          </li>
-        ))}
-      </ul>
-
-      <h3>Chat</h3>
-      <ul>
-        {messages.map((msg, index) => (
-          <li key={index}>
-            <strong>{msg.from}:</strong> {msg.message}
-          </li>
-        ))}
-      </ul>
-
-      <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Digite sua mensagem" />
-      <button disabled={!selectedUser} onClick={sendMessage}>
-        Enviar
-      </button>
+    <div className="login-container">
+      <h2>Bem-vindo ao Chat</h2>
+      <button onClick={handleLogin}>Entrar com Google</button>
+      {showPopup && (
+        <div className="popup">
+          <p>Login bem-sucedido! Redirecionando...</p>
+        </div>
+      )}
     </div>
   );
 }
 
-export default Chat;
+export default Login;
